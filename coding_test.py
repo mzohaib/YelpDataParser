@@ -21,7 +21,6 @@ class YelpDataProcessor(object):
         self.spark = SparkSession \
             .builder \
             .appName("NewYorker Coding Test") \
-            .config("spark.some.config.option", "some-value") \
             .getOrCreate()
 
         self.data_frame = self.spark.read.json(file_path)
@@ -31,7 +30,9 @@ class YelpDataProcessor(object):
             Query yelp_academic_dataset_user.json data
             lists all users with more than 4 star rating
         """
-        pass
+        user_query_result = self.data_frame.select("user_id", "average_stars").where(
+            self.data_frame["average_stars"] > 4)
+        user_query_result.show()
 
     def query_reviews(self):
         """
@@ -48,14 +49,16 @@ class YelpDataProcessor(object):
             Query yelp_academic_dataset_business.json
             lists all business states by their average review count
         """
-        pass
+        business_query_result = self.data_frame.groupBy("state").agg({"review_count": "avg"})
+        business_query_result.show()
 
     def query_checkin(self):
         """
             Query yelp_academic_dataset_checkin.json data
-            Get business_id with max number of checkins and the number of checkins
+            Show total number of checkins
         """
-        pass
+        checkin_query_result = self.data_frame.where(self.data_frame["type"] == "checkin")
+        print(checkin_query_result.count())
 
     def query_tip(self):
         """
@@ -65,10 +68,13 @@ class YelpDataProcessor(object):
 
     pass
 
+
 if __name__ == '__main__':
+    # TODO: Add command line arg support
+
     tar_file_path = "/home/training/Desktop/ny/ny_json.tar.gz"
-    query = "business,tip,checkin,user,reviews"
-    yelp_processor = YelpDataProcessor()
+    query = "business,user,checkin"
+    yelp_processor = YelpDataProcessor(tar_file_path)
 
     if "business" in query:
         print("All business States by their average review count")
