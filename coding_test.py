@@ -1,5 +1,7 @@
 from pyspark import SparkContext
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import year
+from optparse import OptionParser
 
 
 class YelpDataProcessor(object):
@@ -31,25 +33,36 @@ class YelpDataProcessor(object):
             lists all users with more than 4 star rating
         """
         user_query_result = self.data_frame.select("user_id", "average_stars").where(
-            self.data_frame["average_stars"] > 4)
+            self.data_frame["type"] == "user")
+        user_query_result = user_query_result.where(self.data_frame["average_stars"] > 4)
         user_query_result.show()
 
     def query_reviews(self):
         """
             Query yelp_academic_dataset_review.json data
             Number of positive, negative and neutral reviews. Criteria based on keyword:
-            positive: good
+            positive: stars
             negative: bad
             neutral: all others
         """
-        pass
+        review_query_result = self.data_frame.where(self.data_frame["type"] == "review")
+        total_count = review_query_result.count()
+
+        positive_count = review_query_result.where(self.data_frame["text"].like('%good%')).count()
+        negative_count = review_query_result.where(self.data_frame["text"].like('%bad%')).count()
+
+        neutral_count = total_count - (positive_count + negative_count)
+
+        print('Positive:' + str(positive_count) + '\n' + 'Negative:' + str(negative_count) + '\n' + 'Neutral:' + str(
+            neutral_count))
 
     def query_business(self):
         """
             Query yelp_academic_dataset_business.json
             lists all business states by their average review count
         """
-        business_query_result = self.data_frame.groupBy("state").agg({"review_count": "avg"})
+        business_query_result = self.data_frame.where(self.data_frame["type"] == "business") \
+            .groupBy("state").agg({"review_count": "avg"})
         business_query_result.show()
 
     def query_checkin(self):
@@ -65,27 +78,39 @@ class YelpDataProcessor(object):
             Query yelp_academic_dataset_tip.json data
             Show number of tips per year
         """
-
-    pass
+        tip_query_result = self.data_frame.where(self.data_frame["type"] == "tip") \
+            .groupBy(year(self.data_frame["date"]).alias("year")) \
+            .agg({"*": "count"})
+        tip_query_result.show()
 
 
 if __name__ == '__main__':
-    # TODO: Add command line arg support
+    parser = OptionParser()
+    parser.add_option('-q', '--query', dest="query", help="comma seperated query types for e.g tip,user")
+    parser.add_option('-f', '--filepath', dest="filepath", help="tar file path")
+    options, args = parser.parse_args()
 
-    tar_file_path = "/home/training/Desktop/ny/ny_json.tar.gz"
-    query = "business,user,checkin"
-    yelp_processor = YelpDataProcessor(tar_file_path)
+    if options.query and options.filepath:
+        # tar_file_path = "/home/training/Desktop/ny/ny_json.tar.gz"
+        # tar_file_path = "/home/training/Desktop/ny/small/yelp_academic_dataset_business.json"
+        # query = "user,business,checkin,reviews,tip"
+        yelp_processor = YelpDataProcessor(options.filepath)
 
-    if "business" in query:
-        print("All business States by their average review count")
-        yelp_processor.query_business()
-    if "checkin" in query:
-        print("Business with max number of check-ins")
-        yelp_processor.query_checkin()
-
-    if "user" in query:
-        print("All users with more than 4 star rating")
-        yelp_processor.query_user()
-    if "reviews" in query:
-        print("Number of positive, negative and neutral reviews")
-        yelp_processor.query_reviews()
+        if "business" in options.query:
+            print("All business States by their average review count")
+            yelp_processor.query_business()
+        if "checkin" in options.query:
+            print("Business with max number of check-ins")
+            yelp_processor.query_checkin()
+        if "user" in options.query:
+            print("All users with more than 4 star rating")
+            yelp_processor.query_user()
+        if "reviews" in options.query:
+            print("Number of positive, negative and neutral reviews")
+            yelp_processor.query_reviews()
+        if "tip" in options.query:
+            print("Number of tips per year")
+            yelp_processor.query_tip()
+    else:
+        print("Error: Required parameters missing, please run the script in the following way: "
+              "coding_test.py -f /path/to/file.tar.gz -q user,tip,reviews,business,checkin")
